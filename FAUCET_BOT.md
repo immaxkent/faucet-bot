@@ -57,12 +57,12 @@ node scripts/faucet-bot.js
 1. Workflow checks if 2+ hours + random 1-5 min have elapsed since last run
 2. If not enough time has passed, workflow exits (no resources used)
 3. If ready, opens the Circle faucet at https://faucet.circle.com/
-4. Selects USDC token
-5. Selects Arc testnet
-6. Enters the Arc wallet address
-7. Submits the request
-8. Repeats for Ethereum Sepolia
-9. Updates timestamp for next run
+4. Makes 4 requests (both addresses on both networks):
+   - Address 1 → Arc testnet USDC
+   - Address 1 → Ethereum Sepolia USDC
+   - Address 2 → Arc testnet USDC
+   - Address 2 → Ethereum Sepolia USDC
+5. Updates timestamp for next run
 
 ### Manual Trigger
 You can manually trigger the workflow via GitHub Actions:

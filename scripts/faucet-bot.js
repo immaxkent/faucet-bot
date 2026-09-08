@@ -187,31 +187,54 @@ async function main() {
     console.log(`\n📂 Opening Circle Faucet`);
     console.log(`   URL: ${FAUCET_URL}`);
 
+    const results = {};
+
+    // Request USDC for Address 1 on Arc
     await page.goto(FAUCET_URL, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForTimeout(2000);
+    results.addr1_arc = await requestUsdc(page, ADDRESSES.ARC, 'Arc', 'USDC');
 
-    // Request USDC on Arc testnet
-    const arcSuccess = await requestUsdc(page, ADDRESSES.ARC, 'Arc', 'USDC');
-
-    // Wait before second request
-    console.log(`\n⏳ Waiting before second request...`);
+    // Wait before next request
+    console.log(`\n⏳ Waiting 3 seconds...`);
     await page.waitForTimeout(3000);
 
-    // Refresh page and request USDC on Eth Sepolia
-    console.log(`\n🔄 Refreshing for second request...`);
+    // Request USDC for Address 1 on Eth Sepolia
+    console.log(`\n🔄 Refreshing page...`);
     await page.goto(FAUCET_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    results.addr1_sepolia = await requestUsdc(page, ADDRESSES.ARC, 'Ethereum Sepolia', 'USDC');
 
-    const sepoliaSuccess = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Ethereum Sepolia', 'USDC');
+    // Wait before next request
+    console.log(`\n⏳ Waiting 3 seconds...`);
+    await page.waitForTimeout(3000);
+
+    // Request USDC for Address 2 on Arc
+    console.log(`\n🔄 Refreshing page...`);
+    await page.goto(FAUCET_URL, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    results.addr2_arc = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Arc', 'USDC');
+
+    // Wait before next request
+    console.log(`\n⏳ Waiting 3 seconds...`);
+    await page.waitForTimeout(3000);
+
+    // Request USDC for Address 2 on Eth Sepolia
+    console.log(`\n🔄 Refreshing page...`);
+    await page.goto(FAUCET_URL, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    results.addr2_sepolia = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Ethereum Sepolia', 'USDC');
 
     // Summary
     console.log('\n' + '='.repeat(50));
     console.log('📊 Summary:');
-    console.log(`   Arc Testnet:     ${arcSuccess ? '✅ Success' : '❌ Failed'}`);
-    console.log(`   Ethereum Sepolia: ${sepoliaSuccess ? '✅ Success' : '❌ Failed'}`);
+    console.log(`   Address 1 → Arc:              ${results.addr1_arc ? '✅' : '❌'}`);
+    console.log(`   Address 1 → Ethereum Sepolia: ${results.addr1_sepolia ? '✅' : '❌'}`);
+    console.log(`   Address 2 → Arc:              ${results.addr2_arc ? '✅' : '❌'}`);
+    console.log(`   Address 2 → Ethereum Sepolia: ${results.addr2_sepolia ? '✅' : '❌'}`);
 
-    if (arcSuccess && sepoliaSuccess) {
-      console.log('\n✅ All requests completed successfully!');
+    const allSuccessful = Object.values(results).every(v => v);
+    if (allSuccessful) {
+      console.log('\n✅ All 4 requests completed successfully!');
       process.exit(0);
     } else {
       console.log('\n⚠️  Some requests may have failed, check logs above');

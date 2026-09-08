@@ -84,21 +84,26 @@ Check 4: 2:30 → Elapsed: 2h0m ≥ 2h1-5m → RUN
 
 ## What the Bot Does
 
-On each execution:
+On each execution, makes 4 USDC requests (accumulating on both networks):
 
 1. **Opens** Circle faucet (https://faucet.circle.com/)
-2. **For Arc testnet**:
-   - Selects USDC token dropdown
-   - Selects Arc network dropdown
-   - Enters wallet address
+2. **Address 1 → Arc Testnet**:
+   - Selects USDC token, Arc network
+   - Enters Address 1
    - Submits request
-3. **For Ethereum Sepolia**:
-   - Refreshes page
-   - Selects USDC token dropdown
-   - Selects Ethereum Sepolia network dropdown
-   - Enters wallet address
+3. **Address 1 → Ethereum Sepolia**:
+   - Refreshes, selects USDC token, Ethereum Sepolia network
+   - Enters Address 1
    - Submits request
-4. **Updates** `.faucet-bot-last-run` timestamp for next check
+4. **Address 2 → Arc Testnet**:
+   - Refreshes, selects USDC token, Arc network
+   - Enters Address 2
+   - Submits request
+5. **Address 2 → Ethereum Sepolia**:
+   - Refreshes, selects USDC token, Ethereum Sepolia network
+   - Enters Address 2
+   - Submits request
+6. **Updates** `.faucet-bot-last-run` timestamp for next check
 
 ## Monitoring
 
