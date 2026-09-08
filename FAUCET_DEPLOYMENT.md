@@ -55,43 +55,50 @@ Or via GitHub web UI:
 
 ### Schedule
 
-```yaml
-schedule:
-  - cron: '0 */2 * * *'  # Every 2 hours at minute 0
+The workflow runs on a **variable 2+ hour interval** with 1-5 minutes of random variance:
+
+```
+Execution times (example): 00:00 → 02:01 → 04:05 → 06:03 → 08:01 → ...
+                                    +2h1m    +2h4m    +1h58m  +1h60m
 ```
 
-This creates runs at: 00:00, 02:00, 04:00, 06:00, 08:00, 10:00, 12:00, 14:00, 16:00, 18:00, 20:00, 22:00 UTC
+**How it works:**
+- Workflow checks every 30 minutes via: `cron: '*/30 * * * *'`
+- Only runs bot if ≥(2 hours + random 1-5 minutes) have elapsed since last run
+- Tracks last run time in `.faucet-bot-last-run` file
+- Efficient: most checks skip expensive setup, only run bot when needed
 
-**Timezone Note**: GitHub Actions cron uses UTC. Adjust times accordingly for your timezone.
-
-### Random Variance
-
-The bot adds 0-5 minutes of random delay before execution to:
-- Spread requests across the time window
-- Avoid rate limiting
-- Mimic natural user behavior
+**Example decision logic:**
+```
+Check 1: 0:30 → Last run: never (force first run) → RUN
+Check 2: 1:00 → Elapsed: 30 min < 2h1-5m → Skip
+Check 3: 2:00 → Elapsed: 1h30m < 2h1-5m → Skip  
+Check 4: 2:30 → Elapsed: 2h0m ≥ 2h1-5m → RUN
+```
 
 ### Timeout
 
-- **Total workflow timeout**: 10 minutes
+- **Total workflow timeout**: 15 minutes
 - **Page load timeout**: 30 seconds
 - **Element interaction timeout**: 15 seconds
 
 ## What the Bot Does
 
-1. **Waits** 0-5 minutes (random)
-2. **Opens** Circle faucet (https://faucet.circle.com/)
-3. **For Arc testnet**:
-   - Selects USDC token
-   - Selects Arc network
+On each execution:
+
+1. **Opens** Circle faucet (https://faucet.circle.com/)
+2. **For Arc testnet**:
+   - Selects USDC token dropdown
+   - Selects Arc network dropdown
    - Enters wallet address
    - Submits request
-4. **For Ethereum Sepolia**:
+3. **For Ethereum Sepolia**:
    - Refreshes page
-   - Selects USDC token
-   - Selects Ethereum Sepolia network
+   - Selects USDC token dropdown
+   - Selects Ethereum Sepolia network dropdown
    - Enters wallet address
    - Submits request
+4. **Updates** `.faucet-bot-last-run` timestamp for next check
 
 ## Monitoring
 
@@ -168,23 +175,38 @@ The workflow automatically installs Playwright browsers. If it fails:
 
 ## Advanced Configuration
 
-### Change Schedule
+### Change Minimum Interval (e.g., 3 hours instead of 2)
+
+Edit `.github/workflows/faucet-bot.yml` in the `Check if execution is due` step:
+
+```bash
+# Change 7200 to desired seconds (3 hours = 10800)
+MIN_INTERVAL=$((10800 + RANDOM_DELAY))
+```
+
+### Change Random Variance (e.g., 2-10 minutes instead of 1-5)
+
+Edit `.github/workflows/faucet-bot.yml` in the `Check if execution is due` step:
+
+```bash
+# For 2-10 minute variance: 120 + random up to 480
+RANDOM_DELAY=$((120 + RANDOM % 480))
+
+# For 0-2 minute variance: 0 + random up to 120
+RANDOM_DELAY=$((0 + RANDOM % 120))
+```
+
+### Change Check Frequency (e.g., every 15 minutes instead of 30)
 
 Edit `.github/workflows/faucet-bot.yml`:
 
 ```yaml
 schedule:
-  # Run every hour
-  - cron: '0 * * * *'
-  
-  # Run every 3 hours
-  - cron: '0 0,3,6,9,12,15,18,21 * * *'
-  
-  # Run at specific times (e.g., 9 AM and 6 PM UTC)
-  - cron: '0 9,18 * * *'
+  # Check every 15 minutes instead of every 30
+  - cron: '*/15 * * * *'
 ```
 
-[Cron syntax reference](https://crontab.guru/)
+Lower values = more frequent checks = slightly more Actions usage but closer timing precision.
 
 ### Change Networks/Tokens
 
@@ -199,19 +221,6 @@ async function main() {
   
   // Or change existing ones
   const sepoliaSuccess = await requestUsdc(page, ADDRESSES.SEPOLIA, 'Polygon Mumbai', 'USDC');
-}
-```
-
-### Increase/Decrease Random Variance
-
-Edit `scripts/faucet-bot.js`:
-
-```javascript
-async function randomDelay() {
-  // Change 5 to desired max minutes
-  const delay = Math.random() * 10 * 60 * 1000;  // 0-10 minutes
-  console.log(`⏳ Waiting ${Math.round(delay / 1000)} seconds...`);
-  await new Promise(resolve => setTimeout(resolve, delay));
 }
 ```
 
