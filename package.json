@@ -1,0 +1,24 @@
+{
+  "name": "faucet-bot",
+  "version": "1.0.0",
+  "description": "Automated USDC faucet bot for Arc testnet and Ethereum Sepolia",
+  "main": "scripts/faucet-bot.js",
+  "scripts": {
+    "start": "node scripts/faucet-bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "faucet",
+    "usdc",
+    "arc",
+    "ethereum",
+    "sepolia",
+    "automation",
+    "playwright"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.46.0"
+  }
+}

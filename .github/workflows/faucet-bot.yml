@@ -1,0 +1,33 @@
+name: USDC Faucet Bot
+
+on:
+  schedule:
+    # Run every 2 hours (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  faucet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run faucet bot
+        run: node scripts/faucet-bot.js
+        env:
+          ADDRESS_ARC: ${{ secrets.ADDRESS_ARC }}
+          ADDRESS_ETH_SEPOLIA: ${{ secrets.ADDRESS_ETH_SEPOLIA }}
