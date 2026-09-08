@@ -8,13 +8,6 @@ const ADDRESSES = {
 const FAUCET_URL = 'https://faucet.circle.com/';
 const MAX_RETRIES = 2;
 
-// Random delay: 0-5 minutes (0-300000 ms)
-async function randomDelay() {
-  const delay = Math.random() * 5 * 60 * 1000;
-  console.log(`⏳ Waiting ${Math.round(delay / 1000)} seconds before running faucet...`);
-  await new Promise(resolve => setTimeout(resolve, delay));
-}
-
 async function findAndClickDropdown(page, keywords) {
   console.log(`  Looking for dropdown with keywords: ${keywords.join(', ')}`);
 
@@ -178,9 +171,6 @@ async function requestUsdc(page, address, network, token, attempt = 1) {
 async function main() {
   console.log('🚰 USDC Faucet Bot v1.0');
   console.log('='.repeat(50));
-
-  // Apply random delay
-  await randomDelay();
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.createBrowserContext({

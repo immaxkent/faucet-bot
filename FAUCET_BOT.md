@@ -47,18 +47,22 @@ node scripts/faucet-bot.js
 ## How It Works
 
 ### Schedule
-- **Base frequency**: Every 2 hours
-- **Variance**: Random delay of 0-5 minutes before execution
-- **Cron**: `0 */2 * * *` (UTC timezone in GitHub Actions)
+- **Minimum interval**: 2 hours (7200 seconds)
+- **Random variance**: 1-5 minutes added to each interval
+- **Example timeline**: Run at 00:00, then ~2:01-2:05, then ~4:02-4:04, etc.
+- **Checker frequency**: Workflow checks every 30 minutes to see if it's time to run
+- **Last run tracking**: Timestamp stored in `.faucet-bot-last-run` file
 
 ### Bot Behavior
-1. Waits a random amount of time (0-5 minutes)
-2. Opens the Circle faucet at https://faucet.circle.com/
-3. Selects USDC token
-4. Selects Arc testnet
-5. Enters the Arc wallet address
-6. Submits the request
-7. Repeats for Ethereum Sepolia
+1. Workflow checks if 2+ hours + random 1-5 min have elapsed since last run
+2. If not enough time has passed, workflow exits (no resources used)
+3. If ready, opens the Circle faucet at https://faucet.circle.com/
+4. Selects USDC token
+5. Selects Arc testnet
+6. Enters the Arc wallet address
+7. Submits the request
+8. Repeats for Ethereum Sepolia
+9. Updates timestamp for next run
 
 ### Manual Trigger
 You can manually trigger the workflow via GitHub Actions:
@@ -103,10 +107,12 @@ If it still fails, you may need to update `scripts/faucet-bot.js` with new selec
 
 ## Notes
 
-- The bot uses a random delay to avoid hitting rate limits
-- Each workflow run timeout is set to 10 minutes
-- Playwright installs browser binaries during workflow setup
-- User agent is randomized to avoid bot detection
+- The workflow checks every 30 minutes but only runs if 2+ hours + random 1-5 min have passed
+- This minimizes GitHub Actions usage while maintaining variable scheduling
+- Each actual bot run timeout is set to 15 minutes
+- Workflow skips expensive setup (Node, Playwright) on check-only runs
+- Playwright installs browser binaries only when bot actually runs
+- User agent is realistic to avoid bot detection
 
 ## Roadmap
 

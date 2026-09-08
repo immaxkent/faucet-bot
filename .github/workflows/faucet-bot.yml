@@ -2,32 +2,75 @@ name: USDC Faucet Bot
 
 on:
   schedule:
-    # Run every 2 hours (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
-    - cron: '0 */2 * * *'
+    # Runs every 30 minutes to check if it's time to execute
+    - cron: '*/30 * * * *'
   workflow_dispatch: # Allow manual triggers
 
 jobs:
   faucet:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if execution is due
+        id: check_schedule
+        run: |
+          # Read last run timestamp
+          LAST_RUN=$(cat .faucet-bot-last-run 2>/dev/null || echo "0")
+          CURRENT_TIME=$(date +%s)
+          ELAPSED=$((CURRENT_TIME - LAST_RUN))
+
+          # 2 hours = 7200 seconds, plus random 60-300 seconds (1-5 min)
+          RANDOM_DELAY=$((60 + RANDOM % 240))
+          MIN_INTERVAL=$((7200 + RANDOM_DELAY))
+
+          echo "Last run: $LAST_RUN"
+          echo "Current time: $CURRENT_TIME"
+          echo "Elapsed: $ELAPSED seconds"
+          echo "Min interval needed: $MIN_INTERVAL seconds"
+
+          if [ $ELAPSED -ge $MIN_INTERVAL ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✓ Time to run faucet bot!"
+          else
+            WAIT_TIME=$((MIN_INTERVAL - ELAPSED))
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "⏳ Waiting ${WAIT_TIME}s (next run in ~$((WAIT_TIME / 60)) min)"
+          fi
+
       - name: Setup Node.js
+        if: steps.check_schedule.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.check_schedule.outputs.should_run == 'true'
         run: npm install
 
       - name: Install Playwright browsers
+        if: steps.check_schedule.outputs.should_run == 'true'
         run: npx playwright install chromium
 
       - name: Run faucet bot
+        if: steps.check_schedule.outputs.should_run == 'true'
         run: node scripts/faucet-bot.js
         env:
           ADDRESS_ARC: ${{ secrets.ADDRESS_ARC }}
           ADDRESS_ETH_SEPOLIA: ${{ secrets.ADDRESS_ETH_SEPOLIA }}
+
+      - name: Update last run timestamp
+        if: steps.check_schedule.outputs.should_run == 'true'
+        run: date +%s > .faucet-bot-last-run
+
+      - name: Commit timestamp
+        if: steps.check_schedule.outputs.should_run == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "faucet-bot"
+          git add .faucet-bot-last-run
+          git commit -m "chore: update faucet bot last run timestamp" || true
+          git push || true
