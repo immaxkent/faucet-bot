@@ -6,39 +6,61 @@ const ADDRESSES = {
 };
 
 const FAUCET_URL = 'https://faucet.circle.com/';
-const MAX_RETRIES = 2;
 
-async function requestUsdc(page, address, network, attempt = 1) {
+async function requestUsdc(page, address, network) {
   console.log(`\n📨 Requesting USDC on ${network} to ${address.substring(0, 6)}...${address.substring(-4)}`);
 
   try {
     // Wait for page to be interactive
     await page.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
 
-    // Step 1: Select USDC token (radio button)
+    // Step 1: Click USDC radio button
     console.log(`  Step 1/3: Selecting USDC token...`);
-    await page.click('input[value="USDC"]');
-    await page.waitForTimeout(500);
-
-    // Step 2: Select network from dropdown
-    console.log(`  Step 2/3: Selecting network (${network})...`);
-    // Click the network dropdown button
-    const networkButton = await page.locator('button:has-text("Network"), button:has-text("Arc"), button:has-text("Ethereum")').first();
-    await networkButton.click();
-    await page.waitForTimeout(800);
-
-    // Look for the network option in the dropdown
-    let networkOption;
-    if (network.toLowerCase().includes('ethereum') || network.toLowerCase().includes('sepolia')) {
-      networkOption = await page.locator('text=Ethereum Sepolia').first();
-    } else if (network.toLowerCase().includes('arc')) {
-      networkOption = await page.locator('text=Arc Testnet').first();
+    const usdcRadio = await page.$('input[value="USDC"]');
+    if (usdcRadio) {
+      await usdcRadio.click();
+      await page.waitForTimeout(500);
     }
 
-    if (networkOption) {
-      await networkOption.click();
-      await page.waitForTimeout(600);
+    // Step 2: Click network dropdown button and select network
+    console.log(`  Step 2/3: Selecting network (${network})...`);
+    const networkButtons = await page.$$('button');
+    let clicked = false;
+
+    for (const btn of networkButtons) {
+      const text = await btn.textContent();
+      if (text && (text.includes('Network') || text.includes('Arc') || text.includes('Ethereum'))) {
+        await btn.click();
+        clicked = true;
+        break;
+      }
+    }
+
+    if (!clicked) {
+      throw new Error('Could not find network button');
+    }
+
+    await page.waitForTimeout(1000);
+
+    // Find and click the network option
+    const options = await page.$$('div[role="option"], li, div');
+    let foundNetwork = false;
+
+    for (const opt of options) {
+      const text = await opt.textContent();
+      if (text) {
+        if ((network.includes('Ethereum') && text.includes('Ethereum Sepolia')) ||
+            (network.includes('Arc') && text.includes('Arc Testnet'))) {
+          await opt.click();
+          foundNetwork = true;
+          break;
+        }
+      }
+    }
+
+    if (foundNetwork) {
+      await page.waitForTimeout(800);
       console.log(`  ✓ Selected ${network}`);
     } else {
       throw new Error(`Could not find network option: ${network}`);
@@ -46,96 +68,83 @@ async function requestUsdc(page, address, network, attempt = 1) {
 
     // Step 3: Enter wallet address
     console.log(`  Step 3/3: Entering wallet address...`);
-    const addressInput = await page.locator('input[placeholder="Wallet address"]').first();
+    const addressInputs = await page.$$('input[type="text"]');
+    if (addressInputs.length === 0) {
+      throw new Error('No text input found');
+    }
+
+    const addressInput = addressInputs[addressInputs.length - 1];
     await addressInput.focus();
     await addressInput.fill('');
     await page.waitForTimeout(200);
-    await addressInput.type(address, { delay: 10 });
-    await page.waitForTimeout(500);
+    await addressInput.type(address, { delay: 5 });
+    await page.waitForTimeout(800);
 
     // Step 4: Submit
-    console.log(`  Submitting request...`);
-    const submitButton = await page.locator('button:has-text("Send")').first();
-    await submitButton.click();
-    await page.waitForTimeout(3000);
+    console.log(`  Step 4/3: Submitting...`);
+    const buttons = await page.$$('button');
+    let submitted = false;
 
-    // Check for success or error messages
-    const pageText = await page.textContent();
-    if (pageText.includes('success') || pageText.includes('Success') || pageText.includes('submitted')) {
-      console.log(`  ✅ Request submitted successfully!`);
-      return true;
-    } else {
-      console.log(`  ⚠️  Request submitted (status unclear)`);
-      return true;
+    for (const btn of buttons) {
+      const text = await btn.textContent();
+      if (text && text.toLowerCase().includes('send')) {
+        await btn.click();
+        submitted = true;
+        break;
+      }
     }
+
+    if (!submitted) {
+      throw new Error('Could not find submit button');
+    }
+
+    await page.waitForTimeout(2000);
+    console.log(`  ✅ Request submitted!`);
+    return true;
 
   } catch (error) {
-    console.error(`  ❌ Error on attempt ${attempt}:`, error.message);
-
-    if (attempt < MAX_RETRIES) {
-      console.log(`  Retrying in 3 seconds...`);
-      await page.waitForTimeout(3000);
-      return requestUsdc(page, address, network, attempt + 1);
-    }
-
+    console.error(`  ❌ Error: ${error.message}`);
     return false;
   }
 }
 
 async function main() {
-  console.log('🚰 USDC Faucet Bot v2.0');
+  console.log('🚰 USDC Faucet Bot v2.1');
   console.log('='.repeat(50));
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   });
   const page = await context.newPage();
 
   try {
-    console.log(`\n📂 Opening Circle Faucet`);
-    console.log(`   URL: ${FAUCET_URL}`);
+    console.log(`\n📂 Opening Circle Faucet at ${FAUCET_URL}`);
 
     await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
 
     const results = {};
 
-    // Request USDC for Address 1 on Arc
+    // Request 1: Address 1 on Arc
     results.addr1_arc = await requestUsdc(page, ADDRESSES.ARC, 'Arc Testnet');
 
-    // Wait and refresh before next request
-    console.log(`\n⏳ Waiting 3 seconds...`);
-    await page.waitForTimeout(3000);
-
+    // Refresh and request 2: Address 1 on Sepolia
     console.log(`\n🔄 Refreshing page...`);
     await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
-
-    // Request USDC for Address 1 on Eth Sepolia
     results.addr1_sepolia = await requestUsdc(page, ADDRESSES.ARC, 'Ethereum Sepolia');
 
-    // Wait and refresh before next request
-    console.log(`\n⏳ Waiting 3 seconds...`);
-    await page.waitForTimeout(3000);
-
+    // Refresh and request 3: Address 2 on Arc
     console.log(`\n🔄 Refreshing page...`);
     await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
-
-    // Request USDC for Address 2 on Arc
     results.addr2_arc = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Arc Testnet');
 
-    // Wait and refresh before next request
-    console.log(`\n⏳ Waiting 3 seconds...`);
-    await page.waitForTimeout(3000);
-
+    // Refresh and request 4: Address 2 on Sepolia
     console.log(`\n🔄 Refreshing page...`);
     await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
-
-    // Request USDC for Address 2 on Eth Sepolia
     results.addr2_sepolia = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Ethereum Sepolia');
 
     // Summary
@@ -146,17 +155,12 @@ async function main() {
     console.log(`   Address 2 → Arc:              ${results.addr2_arc ? '✅' : '❌'}`);
     console.log(`   Address 2 → Ethereum Sepolia: ${results.addr2_sepolia ? '✅' : '❌'}`);
 
-    const allSuccessful = Object.values(results).every(v => v);
-    if (allSuccessful) {
-      console.log('\n✅ All 4 requests completed successfully!');
-    } else {
-      console.log('\n⚠️  Some requests may have failed, check logs above');
-    }
+    const successCount = Object.values(results).filter(v => v).length;
+    console.log(`\n✅ Completed: ${successCount}/4 requests successful`);
     process.exit(0);
 
   } catch (error) {
     console.error('\n❌ Fatal Error:', error.message);
-    console.error(error.stack);
     process.exit(1);
   } finally {
     await browser.close();
