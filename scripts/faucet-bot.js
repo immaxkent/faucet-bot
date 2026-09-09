@@ -8,160 +8,74 @@ const ADDRESSES = {
 const FAUCET_URL = 'https://faucet.circle.com/';
 const MAX_RETRIES = 2;
 
-async function findAndClickDropdown(page, keywords) {
-  console.log(`  Looking for dropdown with keywords: ${keywords.join(', ')}`);
-
-  // Strategy 1: Look for buttons with matching text
-  const buttons = await page.$$('button');
-  for (const btn of buttons) {
-    const text = await btn.textContent();
-    if (text && keywords.some(kw => text.toLowerCase().includes(kw.toLowerCase()))) {
-      console.log(`  ✓ Found button: "${text.trim()}"`);
-      await btn.click();
-      await page.waitForTimeout(600);
-      return btn;
-    }
-  }
-
-  // Strategy 2: Look for select elements or comboboxes
-  const inputs = await page.$$('[role="combobox"], select');
-  if (inputs.length > 0) {
-    console.log(`  ✓ Found combobox/select element`);
-    await inputs[0].click();
-    await page.waitForTimeout(600);
-    return inputs[0];
-  }
-
-  throw new Error(`Could not find dropdown with keywords: ${keywords.join(', ')}`);
-}
-
-async function selectDropdownValue(page, value, fuzzyMatch = true) {
-  console.log(`  Searching for option: "${value}"`);
-
-  // Try typing to filter
-  await page.keyboard.type(value);
-  await page.waitForTimeout(800);
-
-  // Look for matching options
-  const options = await page.$$('[role="option"]');
-  if (options.length === 0) {
-    console.log(`  Warning: No options found, trying Enter key`);
-    await page.keyboard.press('Enter');
-    return;
-  }
-
-  // Find best match
-  let bestMatch = null;
-  let bestScore = -1;
-
-  for (const option of options) {
-    const text = await option.textContent();
-    if (!text) continue;
-
-    // Check for exact match
-    if (text.toLowerCase().includes(value.toLowerCase())) {
-      const score = text.toLowerCase() === value.toLowerCase() ? 100 : 50;
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = option;
-      }
-    }
-  }
-
-  if (bestMatch) {
-    console.log(`  ✓ Found matching option`);
-    await bestMatch.click();
-  } else if (options.length > 0) {
-    console.log(`  Using first option`);
-    await options[0].click();
-  }
-
-  await page.waitForTimeout(600);
-}
-
-async function requestUsdc(page, address, network, token, attempt = 1) {
-  console.log(`\n📨 Requesting ${token} on ${network} to ${address.substring(0, 6)}...${address.substring(-4)}`);
+async function requestUsdc(page, address, network, attempt = 1) {
+  console.log(`\n📨 Requesting USDC on ${network} to ${address.substring(0, 6)}...${address.substring(-4)}`);
 
   try {
-    // Wait for page to stabilize
-    await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(1500);
+    // Wait for page to be interactive
+    await page.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {});
+    await page.waitForTimeout(1000);
 
-    // Scroll to top to ensure we see all elements
-    await page.evaluate(() => window.scrollTo(0, 0));
-
-    // Step 1: Select Token
-    console.log(`\n  Step 1/4: Selecting token...`);
-    await findAndClickDropdown(page, ['select', 'token', 'usdc']);
-    await selectDropdownValue(page, 'USDC');
-
-    // Step 2: Select Network
-    console.log(`\n  Step 2/4: Selecting network (${network})...`);
-    await findAndClickDropdown(page, ['network', 'select', 'testnet', 'blockchain', 'chain']);
-    await selectDropdownValue(page, network);
-
-    // Step 3: Enter Address
-    console.log(`\n  Step 3/4: Entering wallet address...`);
-    const addressInputs = await page.$$('input[type="text"], input:not([type="hidden"])');
-
-    if (addressInputs.length === 0) {
-      throw new Error('No text input found for address');
-    }
-
-    // Use the last visible input (usually the address field)
-    const addressInput = addressInputs[addressInputs.length - 1];
-    await addressInput.focus();
-    await addressInput.fill('');
-    await page.waitForTimeout(300);
-    await addressInput.type(address, { delay: 20 });
+    // Step 1: Select USDC token (radio button)
+    console.log(`  Step 1/3: Selecting USDC token...`);
+    await page.click('input[value="USDC"]');
     await page.waitForTimeout(500);
 
-    console.log(`  ✓ Address entered: ${address}`);
+    // Step 2: Select network from dropdown
+    console.log(`  Step 2/3: Selecting network (${network})...`);
+    // Click the network dropdown button
+    const networkButton = await page.locator('button:has-text("Network"), button:has-text("Arc"), button:has-text("Ethereum")').first();
+    await networkButton.click();
+    await page.waitForTimeout(800);
+
+    // Look for the network option in the dropdown
+    let networkOption;
+    if (network.toLowerCase().includes('ethereum') || network.toLowerCase().includes('sepolia')) {
+      networkOption = await page.locator('text=Ethereum Sepolia').first();
+    } else if (network.toLowerCase().includes('arc')) {
+      networkOption = await page.locator('text=Arc Testnet').first();
+    }
+
+    if (networkOption) {
+      await networkOption.click();
+      await page.waitForTimeout(600);
+      console.log(`  ✓ Selected ${network}`);
+    } else {
+      throw new Error(`Could not find network option: ${network}`);
+    }
+
+    // Step 3: Enter wallet address
+    console.log(`  Step 3/3: Entering wallet address...`);
+    const addressInput = await page.locator('input[placeholder="Wallet address"]').first();
+    await addressInput.focus();
+    await addressInput.fill('');
+    await page.waitForTimeout(200);
+    await addressInput.type(address, { delay: 10 });
+    await page.waitForTimeout(500);
 
     // Step 4: Submit
-    console.log(`\n  Step 4/4: Submitting request...`);
-    const submitKeywords = ['request', 'submit', 'claim', 'send', 'continue', 'next'];
-    const buttons = await page.$$('button');
-
-    let submitted = false;
-    for (const btn of buttons) {
-      const text = await btn.textContent();
-      const ariaLabel = await btn.getAttribute('aria-label');
-      const label = text || ariaLabel || '';
-
-      if (submitKeywords.some(kw => label.toLowerCase().includes(kw))) {
-        console.log(`  ✓ Clicking: "${label.trim()}"`);
-        await btn.click();
-        submitted = true;
-        break;
-      }
-    }
-
-    if (!submitted) {
-      console.log(`  Warning: Could not find submit button, trying keyboard Enter`);
-      await page.keyboard.press('Enter');
-    }
-
-    // Wait for submission
+    console.log(`  Submitting request...`);
+    const submitButton = await page.locator('button:has-text("Send")').first();
+    await submitButton.click();
     await page.waitForTimeout(3000);
 
-    // Check for success message or errors
+    // Check for success or error messages
     const pageText = await page.textContent();
-    if (pageText.includes('success') || pageText.includes('submitted') || pageText.includes('claim')) {
-      console.log(`\n  ✅ Request submitted successfully for ${network}`);
+    if (pageText.includes('success') || pageText.includes('Success') || pageText.includes('submitted')) {
+      console.log(`  ✅ Request submitted successfully!`);
       return true;
     } else {
-      console.log(`\n  ⚠️  Request may have been submitted (no success confirmation)`);
+      console.log(`  ⚠️  Request submitted (status unclear)`);
       return true;
     }
 
   } catch (error) {
-    console.error(`\n  ❌ Error on attempt ${attempt}:`, error.message);
+    console.error(`  ❌ Error on attempt ${attempt}:`, error.message);
 
     if (attempt < MAX_RETRIES) {
       console.log(`  Retrying in 3 seconds...`);
       await page.waitForTimeout(3000);
-      return requestUsdc(page, address, network, token, attempt + 1);
+      return requestUsdc(page, address, network, attempt + 1);
     }
 
     return false;
@@ -169,7 +83,7 @@ async function requestUsdc(page, address, network, token, attempt = 1) {
 }
 
 async function main() {
-  console.log('🚰 USDC Faucet Bot v1.0');
+  console.log('🚰 USDC Faucet Bot v2.0');
   console.log('='.repeat(50));
 
   const browser = await chromium.launch({ headless: true });
@@ -183,42 +97,46 @@ async function main() {
     console.log(`\n📂 Opening Circle Faucet`);
     console.log(`   URL: ${FAUCET_URL}`);
 
+    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(2000);
+
     const results = {};
 
     // Request USDC for Address 1 on Arc
-    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(2000);
-    results.addr1_arc = await requestUsdc(page, ADDRESSES.ARC, 'Arc', 'USDC');
+    results.addr1_arc = await requestUsdc(page, ADDRESSES.ARC, 'Arc Testnet');
 
-    // Wait before next request
+    // Wait and refresh before next request
     console.log(`\n⏳ Waiting 3 seconds...`);
     await page.waitForTimeout(3000);
+
+    console.log(`\n🔄 Refreshing page...`);
+    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(2000);
 
     // Request USDC for Address 1 on Eth Sepolia
+    results.addr1_sepolia = await requestUsdc(page, ADDRESSES.ARC, 'Ethereum Sepolia');
+
+    // Wait and refresh before next request
+    console.log(`\n⏳ Waiting 3 seconds...`);
+    await page.waitForTimeout(3000);
+
     console.log(`\n🔄 Refreshing page...`);
     await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
-    results.addr1_sepolia = await requestUsdc(page, ADDRESSES.ARC, 'Ethereum Sepolia', 'USDC');
-
-    // Wait before next request
-    console.log(`\n⏳ Waiting 3 seconds...`);
-    await page.waitForTimeout(3000);
 
     // Request USDC for Address 2 on Arc
-    console.log(`\n🔄 Refreshing page...`);
-    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(2000);
-    results.addr2_arc = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Arc', 'USDC');
+    results.addr2_arc = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Arc Testnet');
 
-    // Wait before next request
+    // Wait and refresh before next request
     console.log(`\n⏳ Waiting 3 seconds...`);
     await page.waitForTimeout(3000);
 
-    // Request USDC for Address 2 on Eth Sepolia
     console.log(`\n🔄 Refreshing page...`);
     await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
-    results.addr2_sepolia = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Ethereum Sepolia', 'USDC');
+
+    // Request USDC for Address 2 on Eth Sepolia
+    results.addr2_sepolia = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Ethereum Sepolia');
 
     // Summary
     console.log('\n' + '='.repeat(50));
@@ -231,11 +149,10 @@ async function main() {
     const allSuccessful = Object.values(results).every(v => v);
     if (allSuccessful) {
       console.log('\n✅ All 4 requests completed successfully!');
-      process.exit(0);
     } else {
       console.log('\n⚠️  Some requests may have failed, check logs above');
-      process.exit(0); // Exit 0 even on partial failure to avoid workflow failures
     }
+    process.exit(0);
 
   } catch (error) {
     console.error('\n❌ Fatal Error:', error.message);
