@@ -186,7 +186,7 @@ async function main() {
     const results = {};
 
     // Request USDC for Address 1 on Arc
-    await page.goto(FAUCET_URL, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
     results.addr1_arc = await requestUsdc(page, ADDRESSES.ARC, 'Arc', 'USDC');
 
@@ -196,7 +196,7 @@ async function main() {
 
     // Request USDC for Address 1 on Eth Sepolia
     console.log(`\n🔄 Refreshing page...`);
-    await page.goto(FAUCET_URL, { waitUntil: 'networkidle' });
+    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
     results.addr1_sepolia = await requestUsdc(page, ADDRESSES.ARC, 'Ethereum Sepolia', 'USDC');
 
@@ -206,7 +206,7 @@ async function main() {
 
     // Request USDC for Address 2 on Arc
     console.log(`\n🔄 Refreshing page...`);
-    await page.goto(FAUCET_URL, { waitUntil: 'networkidle' });
+    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
     results.addr2_arc = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Arc', 'USDC');
 
@@ -216,7 +216,7 @@ async function main() {
 
     // Request USDC for Address 2 on Eth Sepolia
     console.log(`\n🔄 Refreshing page...`);
-    await page.goto(FAUCET_URL, { waitUntil: 'networkidle' });
+    await page.goto(FAUCET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
     results.addr2_sepolia = await requestUsdc(page, ADDRESSES.ETH_SEPOLIA, 'Ethereum Sepolia', 'USDC');
 
